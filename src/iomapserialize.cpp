@@ -7,6 +7,7 @@
 
 #include "bed.h"
 #include "game.h"
+#include "housetile.h"
 
 extern Game g_game;
 
@@ -20,11 +21,9 @@ void IOMapSerialize::loadHouseItems(Map* map)
 	}
 
 	do {
-		unsigned long attrSize;
-		const char* attr = result->getStream("data", attrSize);
-
+		auto attr = result->getString("data");
 		PropStream propStream;
-		propStream.init(attr, attrSize);
+		propStream.init(attr.data(), attr.size());
 
 		uint16_t x, y;
 		uint8_t z;
@@ -74,11 +73,8 @@ bool IOMapSerialize::saveHouseItems()
 		for (HouseTile* tile : house->getTiles()) {
 			saveTile(stream, tile);
 
-			size_t attributesSize;
-			const char* attributes = stream.getStream(attributesSize);
-			if (attributesSize > 0) {
-				if (!stmt.addRow(
-				        fmt::format("{:d}, {:s}", house->getId(), db.escapeBlob(attributes, attributesSize)))) {
+			if (auto attributes = stream.getStream(); !attributes.empty()) {
+				if (!stmt.addRow(fmt::format("{:d}, {:s}", house->getId(), db.escapeString(attributes)))) {
 					return false;
 				}
 				stream.clear();
@@ -124,7 +120,7 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 	}
 
 	Tile* tile = nullptr;
-	if (parent->getParent() == nullptr) {
+	if (!parent->getParent()) {
 		tile = parent->getTile();
 	}
 
@@ -322,7 +318,7 @@ bool IOMapSerialize::saveHouseInfo()
 
 		std::string listText;
 		if (house->getAccessList(GUEST_LIST, listText) && !listText.empty()) {
-			if (!stmt.addRow(fmt::format("{:d}, {}, {:s}", house->getId(), tfs::to_underlying(GUEST_LIST),
+			if (!stmt.addRow(fmt::format("{:d}, {:d}, {:s}", house->getId(), tfs::to_underlying(GUEST_LIST),
 			                             db.escapeString(listText)))) {
 				return false;
 			}
@@ -331,7 +327,7 @@ bool IOMapSerialize::saveHouseInfo()
 		}
 
 		if (house->getAccessList(SUBOWNER_LIST, listText) && !listText.empty()) {
-			if (!stmt.addRow(fmt::format("{:d}, {}, {:s}", house->getId(), tfs::to_underlying(SUBOWNER_LIST),
+			if (!stmt.addRow(fmt::format("{:d}, {:d}, {:s}", house->getId(), tfs::to_underlying(SUBOWNER_LIST),
 			                             db.escapeString(listText)))) {
 				return false;
 			}
@@ -381,10 +377,8 @@ bool IOMapSerialize::saveHouse(House* house)
 	for (HouseTile* tile : house->getTiles()) {
 		saveTile(stream, tile);
 
-		size_t attributesSize;
-		const char* attributes = stream.getStream(attributesSize);
-		if (attributesSize > 0) {
-			if (!stmt.addRow(fmt::format("{:d}, {:s}", houseId, db.escapeBlob(attributes, attributesSize)))) {
+		if (auto attributes = stream.getStream(); attributes.size() > 0) {
+			if (!stmt.addRow(fmt::format("{:d}, {:s}", houseId, db.escapeString(attributes)))) {
 				return false;
 			}
 			stream.clear();
